@@ -116,13 +116,17 @@ def update_history(history: pd.DataFrame, latest: dict) -> pd.DataFrame:
 
 
 def build_excel(today_data: dict, history: pd.DataFrame, filepath: str) -> str:
-    today_rows = [{"Index": name, **vals} for name, vals in today_data.items()]
-    today_df = pd.DataFrame(today_rows)[HISTORY_COLUMNS]
-    history_sorted = history.sort_values(["Date", "Index"])
-
+    """One Today sheet and one History sheet per index (4 sheets total)."""
     with pd.ExcelWriter(filepath, engine="openpyxl") as writer:
-        today_df.to_excel(writer, index=False, sheet_name="Today")
-        history_sorted.to_excel(writer, index=False, sheet_name="History")
+        for name in TICKERS:  # preserves NIFTY 50, SENSEX order
+            today_df = pd.DataFrame([today_data[name]])[["Date", "Open", "High", "Low", "Close"]]
+            today_df.to_excel(writer, index=False, sheet_name=f"{name} - Today"[:31])
+
+            hist_df = (
+                history[history["Index"] == name]
+                .sort_values("Date")[["Date", "Open", "High", "Low", "Close"]]
+            )
+            hist_df.to_excel(writer, index=False, sheet_name=f"{name} - History"[:31])
     return filepath
 
 
@@ -138,8 +142,8 @@ def send_email(filepath: str, report_date: str, history_rows: int) -> None:
 
     body = (
         f"Attached: Nifty 50 and Sensex OHLC for {report_date}.\n\n"
-        f"Sheet 'Today'   - today's OHLC only\n"
-        f"Sheet 'History' - full running log ({history_rows} rows to date)\n\n"
+        f"Sheets: NIFTY 50 - Today / NIFTY 50 - History / "
+        f"SENSEX - Today / SENSEX - History ({history_rows} rows of history to date)\n\n"
         "Auto-generated daily by GitHub Actions. Source: Yahoo Finance (delayed)."
     )
     msg.attach(MIMEText(body, "plain"))
